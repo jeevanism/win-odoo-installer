@@ -52,7 +52,7 @@ $OdooVersions = @{
 $OdooRepoUrl = "https://github.com/odoo/odoo.git"
 
 # Fallback Wheel Configuration for Libsass (to bypass MSVC compiler errors)
-$LibsassWheelUrl = 'https://drive.google.com/uc?export=download&id=1ZcfMCLWJl2WbtKUKoTjfFX7bSEE80bIi'
+$LibsassWheelUrl = "https://raw.githubusercontent.com/jeevanism/win-odoo-installer/main/wheels/libsass/libsass-0.20.1-cp310-cp310-win_amd64.whl"
 $LibsassWheelName = 'libsass-0.20.1-cp310-cp310-win_amd64.whl'
 
 function Check-Prerequisites {
@@ -237,7 +237,7 @@ try {
         }
         Write-Styled-Host "  [OK] Odoo $selectedOdooVersion cloned successfully to '$cloneDir'." -ForegroundColor "Green"
     }
-    
+
 
     # Change location to the CLONE directory to find requirements.txt and create .venv
     Set-Location $parentInstallDir
