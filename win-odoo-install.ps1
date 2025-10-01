@@ -381,6 +381,16 @@ try {
     $startCommand = "& '$parentInstallDir\.venv\Scripts\python.exe' '$cloneDir\odoo-bin' -c odoo.conf"
     Write-Styled-Host "  $startCommand" -ForegroundColor "DarkYellow"
     Write-Host "  (NOTE: Remember to set up and configure your PostgreSQL database before starting.)" -ForegroundColor "Red"
+    $step1 = "cd $parentInstallDir"
+    Write-Styled-Host " 1. Move into the Odoo directory:" -ForegroundColor "White"
+    Write-Styled-Host " -> $step1" -ForegroundColor "DarkYellow"
+    $step2 = ".\.venv\Scripts\Activate.ps1"
+    Write-Styled-Host " 2. Activate the Python Virtual Environment (venv):" -ForegroundColor "White"
+    Write-Styled-Host "  -> $step2" -ForegroundColor "DarkYellow"
+    $step3 = "python.exe .\odoo-src\odoo-bin -c .\odoo.conf"
+    Write-Styled-Host " 3. Run the Odoo server using the generated config file:" -ForegroundColor "White"
+    Write-Styled-Host "  -> $step3" -ForegroundColor "DarkYellow"
+
 
 
 }
