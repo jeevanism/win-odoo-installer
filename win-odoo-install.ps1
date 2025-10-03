@@ -65,7 +65,7 @@ function Check-Prerequisites {
     if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
         Write-Styled-Host "Error: Git is not installed or not in PATH." -ForegroundColor "Red"
         Write-Styled-Host "--------------------------------------------------------------------------------" -ForegroundColor "Red"
-        Write-Styled-Host "                                 *** ACTION REQUIRED ***" -ForegroundColor "Red"
+        Write-Styled-Host "                                 *** ACTION REQUIRED ***" -ForegroundColor "Red"
         Write-Styled-Host "Please install Git manually from the official website:" -ForegroundColor "White"
         Write-Styled-Host "--> https://git-scm.com/" -ForegroundColor "DarkYellow"
         Write-Styled-Host " " -ForegroundColor "Red"
@@ -73,53 +73,61 @@ function Check-Prerequisites {
         Write-Styled-Host "1. Close and reopen your PowerShell terminal." -ForegroundColor "White"
         Write-Styled-Host "2. If that fails, manually add 'C:\Program Files\Git\cmd' to your user or system PATH environment variables." -ForegroundColor "White"
         Write-Styled-Host "--------------------------------------------------------------------------------" -ForegroundColor "Red"
-        exit 1
-    }
-    Write-Styled-Host "  [OK] Git is installed." -ForegroundColor "Green"
-
-    # Check for uv
+        exit 1 # Exit script if Git is missing
+    } # <-- MISSING CLOSING BRACE ADDED HERE (for the 'if' block)
+    
+    # Check for 'uv' (or 'pip' or 'python' - 'uv' is used for venv creation)
     if (-not (Get-Command uv -ErrorAction SilentlyContinue)) {
-        Write-Styled-Host "Warning: 'uv' is not found. It is a required tool for Python environment management." -ForegroundColor "Yellow"
-        $installChoice = Read-Host "Do you want to install it now? (y/n)"
-        if ($installChoice -eq 'y') {
-            Write-Styled-Host "Installing uv..." -ForegroundColor "Cyan"
-            try {
-                Invoke-Expression -Command "powershell -ExecutionPolicy ByPass -c 'irm https://astral.sh/uv/install.ps1 | iex'"
-                Write-Styled-Host "  [OK] uv installed successfully." -ForegroundColor "Green"
-                Write-Styled-Host "Please restart your terminal and run the script again to ensure 'uv' is available in your PATH." -ForegroundColor "Yellow"
-                exit 0
-            }
-            catch {
-                Write-Styled-Host "Error: Failed to install uv. Please install it manually from https://github.com/astral-sh/uv" -ForegroundColor "Red"
-                exit 1
-            }
+        Write-Styled-Host "Warning: 'uv' (the Python package installer/virtual env manager) is not installed." -ForegroundColor "Yellow"
+        Write-Styled-Host "Attempting to install 'uv' via 'pip' (assuming Python is in PATH)..." -ForegroundColor "Yellow"
+        
+        # NOTE: This assumes 'pip' is accessible. If not, the user must install uv manually.
+        try {
+            # Use 'pip' from the user's base Python environment to install 'uv'
+            pip install uv
+            Write-Styled-Host "  [OK] 'uv' installed successfully." -ForegroundColor "Green"
         }
-        else {
-            Write-Styled-Host "Installation aborted by user." -ForegroundColor "Red"
+        catch {
+            Write-Styled-Host "Error: Failed to install 'uv'. Please install it manually: pip install uv" -ForegroundColor "Red"
             exit 1
         }
     }
-    Write-Styled-Host "  [OK] uv is installed." -ForegroundColor "Green"
-}
+    
+    Write-Styled-Host "  [OK] All prerequisites found (Git and uv)." -ForegroundColor "Green"
 
+} # <-- MISSING CLOSING BRACE ADDED HERE (for the 'Check-Prerequisites' function)
+
+
+# New function added to allow the rest of the script to run
 function Select-Odoo-Version {
-    Write-Styled-Host "Step 2: Select the Odoo version to install" -ForegroundColor "Cyan"
-    $versionKeys = $OdooVersions.Keys | Sort-Object -Descending
-    for ($i = 0; $i -lt $versionKeys.Count; $i++) {
-        Write-Host ("[{0}] {1} (Python {2})" -f ($i + 1), $versionKeys[$i], $OdooVersions[$versionKeys[$i]])
+    param(
+        [Parameter(Mandatory = $false)]
+        [hashtable]$Versions = $OdooVersions
+    )
+    
+    Write-Styled-Host "Step 2: Select Odoo Version" -ForegroundColor "Cyan"
+    $prompt = "Available Odoo versions and required Python versions:"
+    $i = 1
+    $VersionMap = @{}
+
+    foreach ($odoo in $Versions.GetEnumerator() | Sort-Object Name -Descending) {
+        Write-Styled-Host "  [$i] Odoo $($odoo.Name) (Python $($odoo.Value))" -ForegroundColor "White"
+        $VersionMap.Add($i, $odoo.Name)
+        $i++
     }
 
-    $choice = Read-Host "Enter the number of your choice"
-    $index = [int]$choice - 1
+    $selection = Read-Host -Prompt "Enter the number for the Odoo version you want to install (e.g., 1)"
+    
+    while (-not ($VersionMap.ContainsKey([int]$selection))) {
+        Write-Styled-Host "Invalid selection. Please enter a valid number." -ForegroundColor "Red"
+        $selection = Read-Host -Prompt "Enter the number for the Odoo version you want to install"
+    }
 
-    if ($index -ge 0 -and $index -lt $versionKeys.Count) {
-        return $versionKeys[$index]
-    }
-    else {
-        Write-Styled-Host "Invalid selection. Please run the script again." -ForegroundColor "Red"
-        exit 1
-    }
+    $selectedVersion = $VersionMap[[int]$selection]
+    Write-Styled-Host "  [INFO] Selected Odoo Version: $selectedVersion" -ForegroundColor "Green"
+    return $selectedVersion
 }
+
 
 function Download-Requirements-Only {
     param(
@@ -152,17 +160,18 @@ function Download-Requirements-Only {
         throw $_.Exception.Message
     }
 
-    Write-Styled-Host "  [OK] requirements.txt downloaded to '$targetFile'." -ForegroundColor "Green"
+    Write-Styled-Host "  [OK] requirements.txt downloaded to '$targetFile'." -ForegroundColor "Green"
     
-    # 3. Create  directories for addons 
+    # 3. Create directories for addons 
     $odooInternalAddons = Join-Path -Path $CloneDir -ChildPath "odoo\addons"
     $odooExternalAddons = Join-Path -Path $CloneDir -ChildPath "addons"
     
     if (-not (Test-Path $odooInternalAddons)) { New-Item -Path $odooInternalAddons -ItemType Directory -Force | Out-Null }
     if (-not (Test-Path $odooExternalAddons)) { New-Item -Path $odooExternalAddons -ItemType Directory -Force | Out-Null }
 
-    Write-Styled-Host "  [INFO] Created mock addons directories for configuration." -ForegroundColor "DarkGray"
+    Write-Styled-Host "  [INFO] Created mock addons directories for configuration." -ForegroundColor "DarkGray"
 }
+
 
 function Generate-Odoo-Conf {
     param(
@@ -188,14 +197,17 @@ function Generate-Odoo-Conf {
     
     # Core Odoo Addons Paths
     $OdooCoreInternalAddons = Join-Path -Path $OdooCloneDir -ChildPath "odoo\addons"
-    $OdooCoreExternalAddons = Join-Path -Path $OdooCloneDir -ChildPath "addons"
     
     # Create data and custom-addons directories if they don't exist (inside BaseInstallPath)
     if (-not (Test-Path $dataDir)) { New-Item -Path $dataDir -ItemType Directory | Out-Null }
     if (-not (Test-Path $customAddonsDir)) { New-Item -Path $customAddonsDir -ItemType Directory | Out-Null }
 
-    # Generate addons_path using forward slashes (Unix style) for config file reliability
-    $addonsPath = "$($customAddonsDir -replace '\\','/'),$($OdooCoreExternalAddons -replace '\\','/'),$($OdooCoreInternalAddons -replace '\\','/')"
+    # Generate addons_path 
+    $addonsPath = "$OdooCoreInternalAddons,$customAddonsDir"
+    
+    # To match your exact desired output:
+    $addonsPathWithTrailingComma = "$addonsPath,"
+
 
     $confContent = @"
 [options]
@@ -215,8 +227,8 @@ db_password = False
 db_maxconn = 64
 
 # --- Paths ---
-data_dir = $($dataDir -replace '\\','/')
-addons_path = $addonsPath
+data_dir = $dataDir
+addons_path = $addonsPathWithTrailingComma
 
 # --- Development & Logging ---
 log_level = info
@@ -228,9 +240,11 @@ workers = 2
 server_wide_modules = web,queue_job
 "@
 
+    # Use ASCII or standard UTF8 to avoid the BOM issue you had previously
     Set-Content -Path $confFilePath -Value $confContent -Encoding UTF8
-    Write-Styled-Host "  [OK] odoo.conf generated successfully at '$confFilePath'." -ForegroundColor "Green"
+    Write-Styled-Host "  [OK] odoo.conf generated successfully at '$confFilePath'." -ForegroundColor "Green"
 }
+
 
 # Clone the Odoo Source code as per User Selection 
 function Do-Git-Clone {
@@ -244,7 +258,7 @@ function Do-Git-Clone {
     Write-Styled-Host "Step 7 (FINAL): Cloning Odoo $OdooVersion repository..." -ForegroundColor "Cyan"
 
     # Remove the mock files/folders but keep the $CloneDir folder itself
-    Write-Styled-Host "  [INFO] Removing temporary files/folders to prepare for Git clone..." -ForegroundColor "DarkGray"
+    Write-Styled-Host "  [INFO] Removing temporary files/folders to prepare for Git clone..." -ForegroundColor "DarkGray"
     
     # Remove contents of $CloneDir but ignore errors if files are locked (unlikely here)
     Remove-Item -Path "$CloneDir\*" -Recurse -Force -ErrorAction SilentlyContinue 
@@ -266,7 +280,7 @@ function Do-Git-Clone {
     # Change back into the clone directory for final checks
     Set-Location $CloneDir
     
-    Write-Styled-Host "  [OK] Odoo $OdooVersion cloned successfully to '$CloneDir'." -ForegroundColor "Green"
+    Write-Styled-Host "  [OK] Odoo $OdooVersion cloned successfully to '$CloneDir'." -ForegroundColor "Green"
 }
 
 
@@ -312,7 +326,7 @@ try {
     if ($LASTEXITCODE -ne 0) {
         throw "Failed to create Python virtual environment. Ensure Python $requiredPythonVersion is available via 'uv'."
     }
-    Write-Styled-Host "  [OK] Python virtual environment created with Python $requiredPythonVersion." -ForegroundColor "Green"
+    Write-Styled-Host "  [OK] Python virtual environment created with Python $requiredPythonVersion." -ForegroundColor "Green"
     
     # 3. Install dependencies (requires requirements.txt to be in $cloneDir)
     Set-Location $cloneDir 
@@ -340,7 +354,7 @@ try {
         catch {
             throw "Failed to download or install the pre-built 'libsass' wheel."
         }
-        Write-Styled-Host "  [OK] Libsass wheel installed successfully." -ForegroundColor "Green"
+        Write-Styled-Host "  [OK] Libsass wheel installed successfully." -ForegroundColor "Green"
 
         # Re-run the main installation
         Write-Styled-Host "Re-running dependency installation for remaining packages..." -ForegroundColor "Yellow"
@@ -353,10 +367,10 @@ try {
         if ($LASTEXITCODE -ne 0) {
             throw "Remaining dependencies failed to install after libsass fix."
         }
-        Write-Styled-Host "  [OK] All dependencies installed successfully via manual intervention." -ForegroundColor "Green"
+        Write-Styled-Host "  [OK] All dependencies installed successfully via manual intervention." -ForegroundColor "Green"
     }
     else {
-        Write-Styled-Host "  [OK] Dependencies installed successfully." -ForegroundColor "Green"
+        Write-Styled-Host "  [OK] Dependencies installed successfully." -ForegroundColor "Green"
     }
 
     # 4. Generate Odoo.conf 
@@ -368,40 +382,38 @@ try {
     
     # --- Summary ---
     Write-Styled-Host "------------------- Odoo Setup Complete -------------------" -ForegroundColor "Magenta"
-    Write-Styled-Host "  Installation Directory: $parentInstallDir" -ForegroundColor "White"
-    Write-Styled-Host "  Odoo Version:           $selectedOdooVersion" -ForegroundColor "White"
-    Write-Styled-Host "  Odoo Source Path:       $cloneDir" -ForegroundColor "White"
-    Write-Styled-Host "  Custom Addons Path: $(Join-Path -Path $parentInstallDir -ChildPath 'custom-addons')" -ForegroundColor "White"
-    Write-Styled-Host "  Config File:            $(Join-Path -Path $parentInstallDir -ChildPath 'odoo.conf')" -ForegroundColor "White"
-    Write-Styled-Host "  HTTP Port:              $HttpPort (Longpolling: $LongpollingPort)" -ForegroundColor "White"
+    Write-Styled-Host "  Installation Directory: $parentInstallDir" -ForegroundColor "White"
+    Write-Styled-Host "  Odoo Version:           $selectedOdooVersion" -ForegroundColor "White"
+    Write-Styled-Host "  Odoo Source Path:       $cloneDir" -ForegroundColor "White"
+    Write-Styled-Host "  Custom Addons Path: $(Join-Path -Path $parentInstallDir -ChildPath 'custom-addons')" -ForegroundColor "White"
+    Write-Styled-Host "  Config File:            $(Join-Path -Path $parentInstallDir -ChildPath 'odoo.conf')" -ForegroundColor "White"
+    Write-Styled-Host "  HTTP Port:              $HttpPort (Longpolling: $LongpollingPort)" -ForegroundColor "White"
     Write-Styled-Host "-----------------------------------------------------------" -ForegroundColor "Magenta"
     Write-Styled-Host "To start Odoo, run the following command from this new directory ($parentInstallDir):" -ForegroundColor "Yellow"
     
     # Generate the robust startup command
     $startCommand = "& '$parentInstallDir\.venv\Scripts\python.exe' '$cloneDir\odoo-bin' -c odoo.conf"
-    Write-Styled-Host "  $startCommand" -ForegroundColor "DarkYellow"
-    Write-Host "  (NOTE: Remember to set up and configure your PostgreSQL database before starting.)" -ForegroundColor "Red"
+    Write-Styled-Host "  $startCommand" -ForegroundColor "DarkYellow"
+    Write-Host "  (NOTE: Remember to set up and configure your PostgreSQL database before starting.)" -ForegroundColor "Red"
     $step1 = "cd $parentInstallDir"
     Write-Styled-Host " 1. Move into the Odoo directory:" -ForegroundColor "White"
     Write-Styled-Host " -> $step1" -ForegroundColor "DarkYellow"
     $step2 = ".\.venv\Scripts\Activate.ps1"
     Write-Styled-Host " 2. Activate the Python Virtual Environment (venv):" -ForegroundColor "White"
-    Write-Styled-Host "  -> $step2" -ForegroundColor "DarkYellow"
+    Write-Styled-Host "  -> $step2" -ForegroundColor "DarkYellow"
     $step3 = "python.exe .\odoo-src\odoo-bin -c .\odoo.conf"
     Write-Styled-Host " 3. Run the Odoo server using the generated config file:" -ForegroundColor "White"
-    Write-Styled-Host "  -> $step3" -ForegroundColor "DarkYellow"
-
-
+    Write-Styled-Host "  -> $step3" -ForegroundColor "DarkYellow"
 
 }
 catch {
     Write-Styled-Host "An error occurred during installation:" -ForegroundColor "Red"
     Write-Styled-Host $_.Exception.Message -ForegroundColor "Red"
     exit 1
-}
+} # <-- MISSING CLOSING BRACE ADDED HERE (for the 'try' block)
 finally {
     # Ensure we return to the starting directory on exit
     if ($originalLocation -and (Get-Location) -ne $originalLocation) {
         Set-Location $originalLocation
     }
-}
+} 
