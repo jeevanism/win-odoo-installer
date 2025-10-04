@@ -32,6 +32,9 @@ function Write-Styled-Host {
     dependency installation with a fallback for compilation errors (like libsass), and configuration file generation.
 .NOTES
     Requires Git and PowerShell 5.1+. Assumes 'Write-Styled-Host' function is defined to provide colored output.
+.AUTHOR
+    CodeWasher@jeevanism.com
+    
 #>
 
 # ==============================================================================
@@ -178,9 +181,9 @@ function Generate-Odoo-Conf {
         [Parameter(Mandatory = $true)]
         [string]$OdooVersion,
         [Parameter(Mandatory = $true)]
-        [string]$BaseInstallPath,
+        [string]$BaseInstallPath, # This will be the new parent (e.g., odoo-19)
         [Parameter(Mandatory = $true)]
-        [string]$OdooCloneDir 
+        [string]$OdooCloneDir # This will be the git clone folder (e.g., odoo-19/odoo-src)
     )
 
     Write-Styled-Host "Step 6: Generating odoo.conf file..." -ForegroundColor "Cyan"
@@ -193,24 +196,30 @@ function Generate-Odoo-Conf {
     # Paths are relative to BaseInstallPath (the new odoo-XX folder)
     $confFilePath = Join-Path -Path $BaseInstallPath -ChildPath "odoo.conf"
     $dataDir = Join-Path -Path $BaseInstallPath -ChildPath "data"
-    $customAddonsDir = Join-Path -Path $BaseInstallPath -ChildPath "custom-addons"
-    
+
     # Core Odoo Addons Paths
+    $OdooCoreExternalAddons = Join-Path -Path $OdooCloneDir -ChildPath "addons"
     $OdooCoreInternalAddons = Join-Path -Path $OdooCloneDir -ChildPath "odoo\addons"
+
+
+    # Custom Addons Path
+    $customAddonsDir = Join-Path -Path $BaseInstallPath -ChildPath "custom-addons"
     
     # Create data and custom-addons directories if they don't exist (inside BaseInstallPath)
     if (-not (Test-Path $dataDir)) { New-Item -Path $dataDir -ItemType Directory | Out-Null }
     if (-not (Test-Path $customAddonsDir)) { New-Item -Path $customAddonsDir -ItemType Directory | Out-Null }
 
-    # Generate addons_path 
-    $addonsPath = "$OdooCoreInternalAddons,$customAddonsDir"
+    # Generate addons_path using forward slashes (Unix style) for config file reliability
+    $addonsPath = "$($OdooCoreExternalAddons -replace '\\','/'),$($OdooCoreInternalAddons -replace '\\','/')", $($customAddonsDir -replace '\\', '/')
     
-    # To match your exact desired output:
-    $addonsPathWithTrailingComma = "$addonsPath,"
-
 
     $confContent = @"
 [options]
+
+# --- Paths ---
+data_dir = $($dataDir -replace '\\','/')
+addons_path = $addonsPath
+
 # This is the password that allows database operations:
 admin_passwd = admin
 
@@ -226,9 +235,7 @@ db_user = False
 db_password = False
 db_maxconn = 64
 
-# --- Paths ---
-data_dir = $dataDir
-addons_path = $addonsPathWithTrailingComma
+
 
 # --- Development & Logging ---
 log_level = info
@@ -240,11 +247,9 @@ workers = 2
 server_wide_modules = web,queue_job
 "@
 
-    # Use ASCII or standard UTF8 to avoid the BOM issue you had previously
     Set-Content -Path $confFilePath -Value $confContent -Encoding UTF8
-    Write-Styled-Host "  [OK] odoo.conf generated successfully at '$confFilePath'." -ForegroundColor "Green"
+    Write-Styled-Host "  [OK] odoo.conf generated successfully at '$confFilePath'." -ForegroundColor "Green"
 }
-
 
 # Clone the Odoo Source code as per User Selection 
 function Do-Git-Clone {
@@ -410,7 +415,7 @@ catch {
     Write-Styled-Host "An error occurred during installation:" -ForegroundColor "Red"
     Write-Styled-Host $_.Exception.Message -ForegroundColor "Red"
     exit 1
-} # <-- MISSING CLOSING BRACE ADDED HERE (for the 'try' block)
+} 
 finally {
     # Ensure we return to the starting directory on exit
     if ($originalLocation -and (Get-Location) -ne $originalLocation) {
