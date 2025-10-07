@@ -249,7 +249,7 @@ proxy_mode = False
 debug_mode = False
 without_demo = False
 workers = 2
-server_wide_modules = web,queue_job
+server_wide_modules = web
 "@
 
     Set-Content -Path $confFilePath -Value $confContent -Encoding Ascii
