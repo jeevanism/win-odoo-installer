@@ -210,7 +210,12 @@ function Generate-Odoo-Conf {
     if (-not (Test-Path $customAddonsDir)) { New-Item -Path $customAddonsDir -ItemType Directory | Out-Null }
 
     # Generate addons_path using forward slashes (Unix style) for config file reliability
-    $addonsPath = "$($OdooCoreExternalAddons -replace '\\','/'),$($OdooCoreInternalAddons -replace '\\','/')", $($customAddonsDir -replace '\\', '/')
+    $pathArray = @(
+        $($OdooCoreInternalAddons -replace '\\','/'),
+        $($OdooCoreExternalAddons -replace '\\','/'),
+        $($customAddonsDir -replace '\\', '/')
+    )
+    $addonsPath = $pathArray -join ','
     
 
     $confContent = @"
@@ -247,7 +252,7 @@ workers = 2
 server_wide_modules = web,queue_job
 "@
 
-    Set-Content -Path $confFilePath -Value $confContent -Encoding UTF8
+    Set-Content -Path $confFilePath -Value $confContent -Encoding utf8NoBOM
     Write-Styled-Host "  [OK] odoo.conf generated successfully at '$confFilePath'." -ForegroundColor "Green"
 }
 
@@ -332,7 +337,15 @@ try {
         throw "Failed to create Python virtual environment. Ensure Python $requiredPythonVersion is available via 'uv'."
     }
     Write-Styled-Host " [OK] Python virtual environment created with Python $requiredPythonVersion." -ForegroundColor "Green"
-    
+
+    Write-Styled-Host "Step 4.5: Installing 'setuptools' (required by Odoo runtime)..." -ForegroundColor "Cyan"
+    $setuptoolsInstallCommand = "uv pip install setuptools"
+    Write-Host "Executing: $setuptoolsInstallCommand"
+    Invoke-Expression $setuptoolsInstallCommand
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to install setuptools. Cannot continue."
+    }
+    Write-Styled-Host " [OK] 'setuptools' installed." -ForegroundColor "Green"
     # 3. Install dependencies (requires requirements.txt to be in $cloneDir)
     Set-Location $cloneDir 
     
