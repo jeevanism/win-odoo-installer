@@ -252,7 +252,7 @@ workers = 2
 server_wide_modules = web,queue_job
 "@
 
-    Set-Content -Path $confFilePath -Value $confContent -Encoding utf8NoBOM
+    Set-Content -Path $confFilePath -Value $confContent -Encoding Ascii
     Write-Styled-Host "  [OK] odoo.conf generated successfully at '$confFilePath'." -ForegroundColor "Green"
 }
 
